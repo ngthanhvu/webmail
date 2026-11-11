@@ -12,6 +12,8 @@ export default {
           light: '#80868b',
           border: '#e0e3e7',
           hover: '#f1f3f4',
+          list: '#f1f3f4',
+          rowhover: '#e8eaed',
           active: '#d3e3fd',
           selected: '#c2e6ff',
           star: '#fbbc04',

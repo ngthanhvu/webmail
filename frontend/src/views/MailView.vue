@@ -1,11 +1,11 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { mdiClose, mdiEmailOutline, mdiLogout, mdiMagnify, mdiMenu } from '@mdi/js'
+import { mdiClose, mdiLogout, mdiMagnify } from '@mdi/js'
 import MdiIcon from '../components/MdiIcon.vue'
 import { api } from '../api'
 import { useAuth } from '../stores/auth'
-import { addrString, avatarColor, fullDate, initial } from '../format'
+import { addrString, avatarColor, fullDate, initial, mailboxLabel } from '../format'
 import Sidebar from '../components/Sidebar.vue'
 import MessageList from '../components/MessageList.vue'
 import MessageDetail from '../components/MessageDetail.vue'
@@ -28,6 +28,22 @@ const toast = ref('')
 let toastTimer = null
 const searchQuery = ref('')
 const sidebarCollapsed = ref(false)
+
+const pageTitle = computed(() => {
+  if (selected.value) {
+    return selected.value.subject || '(không tiêu đề)'
+  }
+  const label = mailboxLabel(activeMailbox.value)
+  return total.value > 0 ? `${label} (${total.value})` : label
+})
+
+watch(
+  pageTitle,
+  (t) => {
+    document.title = t || 'Webmail'
+  },
+  { immediate: true }
+)
 
 const filteredMessages = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -236,100 +252,88 @@ async function logout() {
 </script>
 
 <template>
-  <div class="flex h-screen flex-col overflow-hidden bg-white">
-    <!-- header -->
-    <header class="flex h-16 shrink-0 items-center gap-2 bg-white px-2 sm:px-4">
-      <button
-        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover sm:flex"
-        :title="sidebarCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'"
-        @click="sidebarCollapsed = !sidebarCollapsed"
-      >
-        <MdiIcon :path="mdiMenu" :size="23" />
-      </button>
+  <div class="flex h-screen overflow-hidden bg-white">
+    <Sidebar
+      :mailboxes="mailboxes"
+      :active="activeMailbox"
+      :collapsed="sidebarCollapsed"
+      @select="selectMailbox"
+      @compose="openCompose"
+      @toggle="sidebarCollapsed = !sidebarCollapsed"
+    />
 
-      <div class="flex shrink-0 items-center gap-2 pr-1">
-        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gmail-blue text-white shadow-sm">
-          <MdiIcon :path="mdiEmailOutline" :size="22" />
+    <div class="flex min-w-0 flex-1 flex-col">
+      <!-- header -->
+      <header class="flex h-16 shrink-0 items-center gap-2 bg-white px-4">
+        <div class="flex h-12 max-w-3xl flex-1 items-center gap-3 rounded-full bg-gmail-hover px-5">
+          <MdiIcon :path="mdiMagnify" :size="21" class="shrink-0 text-gmail-sub" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Tìm trong hộp thư"
+            class="h-full min-w-0 flex-1 bg-transparent text-sm text-gmail-text outline-none placeholder:text-gmail-light"
+          />
+          <button v-if="searchQuery" class="text-gmail-sub hover:text-gmail-text" title="Xóa tìm kiếm" @click="searchQuery = ''">
+            <MdiIcon :path="mdiClose" :size="20" />
+          </button>
         </div>
-        <span class="hidden text-[22px] font-normal text-gmail-sub xl:block">Webmail</span>
-      </div>
 
-      <div class="flex h-12 max-w-3xl flex-1 items-center gap-3 rounded-full bg-gmail-hover px-5">
-        <MdiIcon :path="mdiMagnify" :size="21" class="shrink-0 text-gmail-sub" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Tìm trong hộp thư"
-          class="h-full min-w-0 flex-1 bg-transparent text-sm text-gmail-text outline-none placeholder:text-gmail-light"
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+          <button
+            class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+            title="Đăng xuất"
+            @click="logout"
+          >
+            <MdiIcon :path="mdiLogout" :size="21" />
+          </button>
+          <div
+            class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white"
+            :style="{ backgroundColor: avatarColor(auth.username || 'x') }"
+            :title="auth.username"
+          >
+            {{ initial(auth.username) }}
+          </div>
+        </div>
+      </header>
+
+      <!-- body: list full-width, bấm thư -> mở trang đọc thay thế -->
+      <div class="flex min-h-0 flex-1">
+        <MessageDetail
+          v-if="selected"
+          :message="selected"
+          :mailbox="activeMailbox"
+          @back="closeMessage"
+          @reply="openReply"
+          @reply-all="(m) => openReply(m, true)"
+          @forward="openForward"
+          @delete="deleteSelected"
+          @unread="markUnread"
+          @star="toggleStar"
         />
-        <button v-if="searchQuery" class="text-gmail-sub hover:text-gmail-text" title="Xóa tìm kiếm" @click="searchQuery = ''">
-          <MdiIcon :path="mdiClose" :size="20" />
-        </button>
-      </div>
 
-      <div class="ml-auto flex shrink-0 items-center gap-2">
-        <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
-          title="Đăng xuất"
-          @click="logout"
-        >
-          <MdiIcon :path="mdiLogout" :size="21" />
-        </button>
-        <div
-          class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white"
-          :style="{ backgroundColor: avatarColor(auth.username || 'x') }"
-          :title="auth.username"
-        >
-          {{ initial(auth.username) }}
+        <div v-else-if="loadingDetail" class="flex flex-1 items-center justify-center">
+          <svg class="h-6 w-6 animate-spin text-gmail-light" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
         </div>
+
+        <MessageList
+          v-else
+          :messages="filteredMessages"
+          :total="total"
+          :page="page"
+          :limit="limit"
+          :mailbox="activeMailbox"
+          :loading="loadingList"
+          @select="openMessage"
+          @star="toggleStar"
+          @page="changePage"
+          @reply="openReply"
+          @refresh="refresh"
+          @batch="runBatch"
+        />
       </div>
-    </header>
-
-    <!-- body: list full-width, bấm thư -> mở trang đọc thay thế -->
-    <div class="flex min-h-0 flex-1">
-      <Sidebar
-        :mailboxes="mailboxes"
-        :active="activeMailbox"
-        :collapsed="sidebarCollapsed"
-        @select="selectMailbox"
-        @compose="openCompose"
-      />
-
-      <MessageDetail
-        v-if="selected"
-        :message="selected"
-        :mailbox="activeMailbox"
-        @back="closeMessage"
-        @reply="openReply"
-        @reply-all="(m) => openReply(m, true)"
-        @forward="openForward"
-        @delete="deleteSelected"
-        @unread="markUnread"
-        @star="toggleStar"
-      />
-
-      <div v-else-if="loadingDetail" class="flex flex-1 items-center justify-center">
-        <svg class="h-6 w-6 animate-spin text-gmail-light" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-      </div>
-
-      <MessageList
-        v-else
-        :messages="filteredMessages"
-        :total="total"
-        :page="page"
-        :limit="limit"
-        :mailbox="activeMailbox"
-        :loading="loadingList"
-        @select="openMessage"
-        @star="toggleStar"
-        @page="changePage"
-        @reply="openReply"
-        @refresh="refresh"
-        @batch="runBatch"
-      />
     </div>
 
     <ComposeModal v-if="compose" :draft="compose" @close="compose = null" @sent="onSent" />

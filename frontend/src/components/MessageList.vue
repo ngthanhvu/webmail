@@ -74,7 +74,8 @@ function batch(action) {
 
 function rowClass(m) {
   if (isSelected(m.uid)) return 'bg-gmail-selected'
-  return 'hover:bg-gmail-hover'
+  if (!m.seen) return 'bg-white hover:bg-gmail-rowhover'
+  return 'hover:bg-gmail-rowhover'
 }
 
 function senderDisplay(m) {
@@ -83,15 +84,15 @@ function senderDisplay(m) {
 </script>
 
 <template>
-  <section class="flex min-w-0 flex-1 flex-col bg-white">
+  <section class="flex min-w-0 flex-1 flex-col bg-gmail-list">
     <!-- toolbar -->
     <div class="flex h-12 shrink-0 items-center gap-1 px-2">
       <template v-if="selected.length === 0">
-        <label class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition hover:bg-gmail-hover">
+        <label class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition hover:bg-gmail-rowhover">
           <input type="checkbox" class="h-4 w-4 accent-gmail-blue" :checked="allSelected" @change="toggleAll" />
         </label>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
           title="Làm mới"
           @click="emit('refresh')"
         >
@@ -100,7 +101,7 @@ function senderDisplay(m) {
       </template>
       <template v-else>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
           title="Bỏ chọn"
           @click="selected = []"
         >
@@ -108,28 +109,28 @@ function senderDisplay(m) {
         </button>
         <span class="ml-1 text-sm text-gmail-sub">Đã chọn {{ selected.length }}</span>
         <button
-          class="ml-2 flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+          class="ml-2 flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
           title="Đánh dấu sao"
           @click="batch('star')"
         >
           <MdiIcon :path="mdiStarOutline" :size="21" />
         </button>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
           title="Đánh dấu chưa đọc"
           @click="batch('unread')"
         >
           <MdiIcon :path="mdiEmail" :size="21" />
         </button>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
           title="Đánh dấu đã đọc"
           @click="batch('read')"
         >
           <MdiIcon :path="mdiEmailOpen" :size="21" />
         </button>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
           title="Xóa"
           @click="batch('delete')"
         >
@@ -139,7 +140,7 @@ function senderDisplay(m) {
 
       <div v-if="pages > 1" class="ml-auto flex items-center gap-1 pr-2">
         <button
-          class="rounded-full p-1.5 text-gmail-sub transition hover:bg-gmail-hover disabled:cursor-default disabled:opacity-30"
+          class="rounded-full p-1.5 text-gmail-sub transition hover:bg-gmail-rowhover disabled:cursor-default disabled:opacity-30"
           :disabled="page === 0"
           title="Trang trước"
           @click="emit('page', page - 1)"
@@ -148,7 +149,7 @@ function senderDisplay(m) {
         </button>
         <span class="whitespace-nowrap text-xs text-gmail-sub">{{ rangeText }}</span>
         <button
-          class="rounded-full p-1.5 text-gmail-sub transition hover:bg-gmail-hover disabled:cursor-default disabled:opacity-30"
+          class="rounded-full p-1.5 text-gmail-sub transition hover:bg-gmail-rowhover disabled:cursor-default disabled:opacity-30"
           :disabled="(page + 1) * limit >= total"
           title="Trang sau"
           @click="emit('page', page + 1)"
@@ -173,7 +174,7 @@ function senderDisplay(m) {
         <div
           v-for="m in messages"
           :key="m.uid"
-          class="group flex h-12 cursor-pointer items-center gap-2 border-b border-gmail-hover pl-2 pr-4 text-sm sm:gap-3"
+          class="group flex h-12 cursor-pointer items-center gap-2 border-b border-gmail-rowhover pl-2 pr-4 text-sm sm:gap-3"
           :class="rowClass(m)"
           @click="emit('select', m)"
         >

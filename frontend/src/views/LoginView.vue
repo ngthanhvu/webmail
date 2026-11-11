@@ -1,9 +1,13 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { mdiEmailOutline } from '@mdi/js'
 import MdiIcon from '../components/MdiIcon.vue'
 import { useAuth } from '../stores/auth'
+
+onMounted(() => {
+  document.title = 'Webmail'
+})
 
 const router = useRouter()
 const auth = useAuth()
