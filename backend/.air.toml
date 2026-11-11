@@ -1,0 +1,13 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/webmail ."
+bin = "./tmp/webmail"
+include_ext = ["go", "toml", "mod"]
+exclude_dir = ["tmp"]
+delay = 1000
+kill_delay = "0s"
+
+[log]
+time = false

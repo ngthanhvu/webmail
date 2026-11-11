@@ -1,0 +1,7 @@
+.env
+node_modules/
+dist/
+tmp/
+.gomodcache/
+backend/webmail
+*.log
