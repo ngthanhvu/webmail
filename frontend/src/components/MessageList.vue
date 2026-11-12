@@ -14,7 +14,7 @@ import {
   mdiTrashCan,
 } from '@mdi/js'
 import MdiIcon from './MdiIcon.vue'
-import { avatarColor, initial, shortDate, fullDate } from '../format'
+import { initial, shortDate, fullDate, mailboxLabel } from '../format'
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
@@ -73,9 +73,8 @@ function batch(action) {
 }
 
 function rowClass(m) {
-  if (isSelected(m.uid)) return 'bg-gmail-selected'
-  if (!m.seen) return 'bg-white hover:bg-gmail-rowhover'
-  return 'hover:bg-gmail-rowhover'
+  if (isSelected(m.uid)) return 'bg-oc-accentDim'
+  return 'hover:bg-oc-hover/60'
 }
 
 function senderDisplay(m) {
@@ -84,157 +83,174 @@ function senderDisplay(m) {
 </script>
 
 <template>
-  <section class="flex min-w-0 flex-1 flex-col bg-gmail-list">
+  <section class="flex min-w-0 flex-1 flex-col bg-oc-bg">
     <!-- toolbar -->
-    <div class="flex h-12 shrink-0 items-center gap-1 px-2">
+    <div class="flex h-10 shrink-0 items-center gap-1 border-b border-oc-border bg-oc-panel px-2.5">
       <template v-if="selected.length === 0">
-        <label class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition hover:bg-gmail-rowhover">
-          <input type="checkbox" class="h-4 w-4 accent-gmail-blue" :checked="allSelected" @change="toggleAll" />
+        <label
+          class="flex h-7 w-7 cursor-pointer items-center justify-center transition hover:bg-oc-hover"
+        >
+          <input type="checkbox" class="h-3.5 w-3.5" :checked="allSelected" @change="toggleAll" />
         </label>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
+          class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:bg-oc-hover hover:text-oc-text"
           title="Làm mới"
           @click="emit('refresh')"
         >
-          <MdiIcon :path="mdiRefresh" :size="21" />
+          <MdiIcon :path="mdiRefresh" :size="16" />
         </button>
+        <span class="ml-1.5 truncate text-[11px] font-bold uppercase tracking-[0.15em] text-oc-faint">
+          {{ mailboxLabel(mailbox) }}
+        </span>
       </template>
       <template v-else>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
+          class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:bg-oc-hover hover:text-oc-text"
           title="Bỏ chọn"
           @click="selected = []"
         >
-          <MdiIcon :path="mdiClose" :size="21" />
+          <MdiIcon :path="mdiClose" :size="16" />
         </button>
-        <span class="ml-1 text-sm text-gmail-sub">Đã chọn {{ selected.length }}</span>
+        <span class="ml-1 text-xs text-oc-sub">Đã chọn {{ selected.length }}</span>
         <button
-          class="ml-2 flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
+          class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:bg-oc-hover hover:text-oc-text"
           title="Đánh dấu sao"
           @click="batch('star')"
         >
-          <MdiIcon :path="mdiStarOutline" :size="21" />
+          <MdiIcon :path="mdiStarOutline" :size="16" />
         </button>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
+          class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:bg-oc-hover hover:text-oc-text"
           title="Đánh dấu chưa đọc"
           @click="batch('unread')"
         >
-          <MdiIcon :path="mdiEmail" :size="21" />
+          <MdiIcon :path="mdiEmail" :size="16" />
         </button>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
+          class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:bg-oc-hover hover:text-oc-text"
           title="Đánh dấu đã đọc"
           @click="batch('read')"
         >
-          <MdiIcon :path="mdiEmailOpen" :size="21" />
+          <MdiIcon :path="mdiEmailOpen" :size="16" />
         </button>
         <button
-          class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-rowhover"
+          class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:bg-oc-hover hover:text-oc-error"
           title="Xóa"
           @click="batch('delete')"
         >
-          <MdiIcon :path="mdiTrashCan" :size="21" />
+          <MdiIcon :path="mdiTrashCan" :size="16" />
         </button>
       </template>
 
-      <div v-if="pages > 1" class="ml-auto flex items-center gap-1 pr-2">
-        <button
-          class="rounded-full p-1.5 text-gmail-sub transition hover:bg-gmail-rowhover disabled:cursor-default disabled:opacity-30"
-          :disabled="page === 0"
-          title="Trang trước"
-          @click="emit('page', page - 1)"
-        >
-          <MdiIcon :path="mdiChevronLeft" :size="22" />
-        </button>
-        <span class="whitespace-nowrap text-xs text-gmail-sub">{{ rangeText }}</span>
-        <button
-          class="rounded-full p-1.5 text-gmail-sub transition hover:bg-gmail-rowhover disabled:cursor-default disabled:opacity-30"
-          :disabled="(page + 1) * limit >= total"
-          title="Trang sau"
-          @click="emit('page', page + 1)"
-        >
-          <MdiIcon :path="mdiChevronRight" :size="22" />
-        </button>
+      <div class="ml-auto flex items-center gap-1">
+        <span class="mr-1 whitespace-nowrap text-[11px] text-oc-faint">{{ rangeText }}</span>
+        <template v-if="pages > 1">
+          <button
+            class="flex h-6 w-6 items-center justify-center text-oc-faint transition hover:text-oc-text disabled:cursor-default disabled:opacity-30"
+            :disabled="page === 0"
+            title="Trang trước"
+            @click="emit('page', page - 1)"
+          >
+            <MdiIcon :path="mdiChevronLeft" :size="16" />
+          </button>
+          <button
+            class="flex h-6 w-6 items-center justify-center text-oc-faint transition hover:text-oc-text disabled:cursor-default disabled:opacity-30"
+            :disabled="(page + 1) * limit >= total"
+            title="Trang sau"
+            @click="emit('page', page + 1)"
+          >
+            <MdiIcon :path="mdiChevronRight" :size="16" />
+          </button>
+        </template>
       </div>
-      <span v-else class="ml-auto pr-4 text-xs text-gmail-sub">{{ rangeText }}</span>
     </div>
 
     <!-- message rows -->
-    <div class="flex-1 overflow-y-auto" :class="loading ? '' : 'border-t border-gmail-border'">
-      <div v-if="loading" class="flex flex-col items-center gap-2 p-10 text-gmail-light">
-        <svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
+    <div class="flex-1 overflow-y-auto">
+      <div v-if="loading" class="flex flex-col items-center gap-2.5 p-10 text-oc-faint">
+        <svg class="h-5 w-5 animate-spin text-oc-accent" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
         </svg>
-        <span class="text-sm">Đang tải...</span>
+        <span class="text-xs">Đang tải...</span>
       </div>
 
       <template v-else>
         <div
           v-for="m in messages"
           :key="m.uid"
-          class="group flex h-12 cursor-pointer items-center gap-2 border-b border-gmail-rowhover pl-2 pr-4 text-sm sm:gap-3"
+          class="group flex h-10 cursor-pointer items-center gap-2.5 border-b border-oc-border/50 px-3 text-[13px] transition-colors"
           :class="rowClass(m)"
           @click="emit('select', m)"
         >
           <input
             type="checkbox"
-            class="h-4 w-4 shrink-0 accent-gmail-blue opacity-0 transition group-hover:opacity-100"
+            class="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100"
             :class="{ '!opacity-100': isSelected(m.uid) }"
             :checked="isSelected(m.uid)"
             @click.stop="toggleOne(m.uid)"
           />
 
           <button
-            class="shrink-0 rounded-full p-1.5 transition hover:scale-110"
+            class="flex h-5 w-5 shrink-0 items-center justify-center transition"
             :title="m.flagged ? 'Bỏ đánh dấu sao' : 'Đánh dấu sao'"
             @click.stop="emit('star', m)"
           >
             <MdiIcon
               :path="m.flagged ? mdiStar : mdiStarOutline"
-              :size="21"
-              :class="m.flagged ? 'text-gmail-star' : 'text-gmail-light hover:text-gmail-star'"
+              :size="15"
+              :class="
+                m.flagged
+                  ? 'text-oc-star'
+                  : 'text-oc-faint opacity-0 transition group-hover:opacity-100'
+              "
             />
           </button>
 
-          <div
-            class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white"
-            :style="{ backgroundColor: avatarColor(m.fromEmail || m.from || 'x') }"
+          <span
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border border-oc-border bg-oc-surface text-[10px] font-bold text-oc-sub"
           >
             {{ initial(senderDisplay(m)) }}
-          </div>
+          </span>
 
-          <div class="w-40 shrink-0 truncate sm:w-52" :class="!m.seen ? 'font-bold text-gmail-text' : 'font-medium text-gmail-sub'">
-            {{ senderDisplay(m) }}
-          </div>
-
-          <div class="min-w-0 flex-1 truncate" :class="!m.seen ? 'font-bold text-gmail-text' : 'text-gmail-sub'">
-            <span class="font-medium">{{ m.subject || '(không tiêu đề)' }}</span>
-            <span class="ml-2 font-normal text-gmail-light" :class="!m.seen ? 'font-bold' : ''">- {{ m.snippet }}</span>
-          </div>
-
-          <div class="hidden shrink-0 items-center group-hover:flex">
-            <button
-              class="flex h-8 w-8 items-center justify-center rounded-full text-gmail-sub transition hover:bg-white/60"
-              title="Trả lời"
-              @click.stop="emit('reply', m)"
+          <div class="flex w-40 shrink-0 items-center gap-1.5 sm:w-48">
+            <span
+              class="w-1.5 shrink-0 text-center text-[8px] leading-none"
+              :class="m.seen ? 'text-transparent' : 'text-oc-accent'"
+              >●</span
             >
-              <MdiIcon :path="mdiReply" :size="20" />
-            </button>
+            <span
+              class="min-w-0 flex-1 truncate"
+              :class="m.seen ? 'text-oc-sub' : 'font-bold text-oc-text'"
+            >
+              {{ senderDisplay(m) }}
+            </span>
           </div>
+
+          <div class="min-w-0 flex-1 truncate text-oc-sub">
+            <span :class="m.seen ? '' : 'text-oc-text'">{{ m.subject || '(không tiêu đề)' }}</span>
+            <span class="ml-2 text-oc-faint">— {{ m.snippet }}</span>
+          </div>
+
+          <button
+            class="hidden h-6 w-6 shrink-0 items-center justify-center text-oc-faint transition hover:text-oc-accent group-hover:flex"
+            title="Trả lời"
+            @click.stop="emit('reply', m)"
+          >
+            <MdiIcon :path="mdiReply" :size="15" />
+          </button>
 
           <span
-            class="w-16 shrink-0 text-right text-xs text-gmail-sub group-hover:hidden"
+            class="w-20 shrink-0 text-right text-[11px] text-oc-faint group-hover:hidden"
             :title="fullDate(m.date)"
           >
             {{ shortDate(m.date) }}
           </span>
         </div>
 
-        <div v-if="messages.length === 0" class="flex flex-col items-center gap-2 p-12 text-gmail-light">
-          <MdiIcon :path="mdiEmailOutline" :size="40" />
-          <span class="text-sm">Không có thư trong hộp thư này</span>
+        <div v-if="messages.length === 0" class="flex flex-col items-center gap-3 p-12 text-oc-faint">
+          <MdiIcon :path="mdiEmailOutline" :size="32" />
+          <span class="text-xs">Không có thư trong hộp thư này</span>
         </div>
       </template>
     </div>

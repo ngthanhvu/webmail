@@ -9,25 +9,43 @@ body,
 }
 
 body {
-  @apply bg-white text-gmail-text antialiased;
+  @apply bg-oc-bg text-oc-text antialiased;
 }
 
-/* Gmail-like thin scrollbars */
+::selection {
+  background: rgba(255, 93, 0, 0.35);
+}
+
+/* Terminal-like thin scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #dadce0;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: #26262b;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #bdc1c6;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: #38383f;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+input[type='checkbox'] {
+  accent-color: #ff5d00;
+}
+
+button {
+  font-family: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 1px solid #ff5d00;
+  outline-offset: 1px;
 }

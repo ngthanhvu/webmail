@@ -5,11 +5,12 @@ import { mdiClose, mdiLogout, mdiMagnify } from '@mdi/js'
 import MdiIcon from '../components/MdiIcon.vue'
 import { api } from '../api'
 import { useAuth } from '../stores/auth'
-import { addrString, avatarColor, fullDate, initial, mailboxLabel } from '../format'
+import { addrString, fullDate, initial, mailboxLabel } from '../format'
 import Sidebar from '../components/Sidebar.vue'
 import MessageList from '../components/MessageList.vue'
 import MessageDetail from '../components/MessageDetail.vue'
 import ComposeModal from '../components/ComposeModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const router = useRouter()
 const auth = useAuth()
@@ -28,6 +29,30 @@ const toast = ref('')
 let toastTimer = null
 const searchQuery = ref('')
 const sidebarCollapsed = ref(false)
+const confirmState = ref(null) // { type: 'message' | 'batch', uids: [] }
+const deleting = ref(false)
+
+// cache phía client: hiện dữ liệu cũ ngay, tải mới ở nền
+const listCache = {}
+let mailboxesCache = { t: 0, data: null }
+
+function invalidateLists() {
+  for (const k of Object.keys(listCache)) delete listCache[k]
+}
+
+const confirmTitle = computed(() => {
+  const cs = confirmState.value
+  if (!cs) return ''
+  if (cs.type === 'message') return 'Xóa thư này?'
+  return `Xóa ${cs.uids.length} thư?`
+})
+
+const confirmMessage = computed(() => {
+  const cs = confirmState.value
+  if (!cs) return ''
+  if (cs.type === 'message') return 'Thư sẽ được chuyển vào Thùng rác. Bạn chắc chắn chứ?'
+  return 'Các thư đã chọn sẽ được chuyển vào Thùng rác. Bạn chắc chắn chứ?'
+})
 
 const pageTitle = computed(() => {
   if (selected.value) {
@@ -36,6 +61,10 @@ const pageTitle = computed(() => {
   const label = mailboxLabel(activeMailbox.value)
   return total.value > 0 ? `${label} (${total.value})` : label
 })
+
+const activeUnseen = computed(
+  () => mailboxes.value.find((mb) => mb.name === activeMailbox.value)?.unseen || 0
+)
 
 watch(
   pageTitle,
@@ -68,25 +97,43 @@ onMounted(async () => {
   await loadMessages()
 })
 
-async function loadMailboxes() {
+async function loadMailboxes(force = false) {
+  if (!force && mailboxesCache.data && Date.now() - mailboxesCache.t < 15000) {
+    mailboxes.value = mailboxesCache.data
+    return
+  }
   try {
     const data = await api.mailboxes()
     mailboxes.value = data.mailboxes || []
+    mailboxesCache = { t: Date.now(), data: mailboxes.value }
   } catch (e) {
     showToast('Lỗi: ' + e.message)
   }
 }
 
 async function loadMessages() {
-  loadingList.value = true
-  selected.value = null
+  const key = `${activeMailbox.value}:${page.value}`
+  const cached = listCache[key]
+  if (cached) {
+    // hiện ngay dữ liệu cũ, tải mới ở nền (stale-while-revalidate)
+    messages.value = cached.messages
+    total.value = cached.total
+    loadingList.value = false
+  } else {
+    loadingList.value = true
+    selected.value = null
+  }
   try {
     const data = await api.messages(activeMailbox.value, page.value, limit)
+    if (`${activeMailbox.value}:${page.value}` !== key) return // đã chuyển hộp thư khác
     messages.value = data.messages || []
     total.value = data.total || 0
+    listCache[key] = { messages: messages.value, total: total.value }
   } catch (e) {
-    messages.value = []
-    total.value = 0
+    if (!cached) {
+      messages.value = []
+      total.value = 0
+    }
     showToast('Lỗi: ' + e.message)
   }
   loadingList.value = false
@@ -141,18 +188,37 @@ async function toggleStar(m) {
   }
 }
 
-async function deleteSelected() {
-  const m = selected.value
-  if (!m) return
+function deleteSelected() {
+  if (!selected.value) return
+  confirmState.value = { type: 'message' }
+}
+
+async function doDelete() {
+  const cs = confirmState.value
+  if (!cs || deleting.value) return
+  deleting.value = true
   try {
-    await api.flags(m.uid, activeMailbox.value, { deleted: true })
-    showToast('Đã xóa thư')
-    selected.value = null
-    await loadMessages()
-    loadMailboxes()
+    if (cs.type === 'message') {
+      await api.flags(selected.value.uid, activeMailbox.value, { deleted: true })
+      showToast('Đã xóa thư')
+      selected.value = null
+      invalidateLists()
+      await loadMessages()
+      loadMailboxes(true)
+    } else {
+      for (const uid of cs.uids) {
+        await api.flags(uid, activeMailbox.value, { deleted: true })
+      }
+      showToast(`Đã xóa ${cs.uids.length} thư`)
+      invalidateLists()
+      await loadMessages()
+      loadMailboxes(true)
+    }
+    confirmState.value = null
   } catch (e) {
     showToast('Lỗi: ' + e.message)
   }
+  deleting.value = false
 }
 
 async function markUnread() {
@@ -161,8 +227,9 @@ async function markUnread() {
   try {
     await api.flags(m.uid, activeMailbox.value, { seen: false })
     selected.value = null
+    invalidateLists()
     await loadMessages()
-    loadMailboxes()
+    loadMailboxes(true)
   } catch (e) {
     showToast('Lỗi: ' + e.message)
   }
@@ -170,6 +237,10 @@ async function markUnread() {
 
 async function runBatch({ action, uids }) {
   if (!uids.length) return
+  if (action === 'delete') {
+    confirmState.value = { type: 'batch', uids }
+    return
+  }
   try {
     for (const uid of uids) {
       if (action === 'star') await api.flags(uid, activeMailbox.value, { flagged: true })
@@ -179,8 +250,9 @@ async function runBatch({ action, uids }) {
     }
     if (action === 'delete') showToast(`Đã xóa ${uids.length} thư`)
     else showToast('Đã cập nhật')
+    invalidateLists()
     await loadMessages()
-    loadMailboxes()
+    loadMailboxes(true)
   } catch (e) {
     showToast('Lỗi: ' + e.message)
   }
@@ -240,9 +312,10 @@ function onSent() {
   compose.value = null
   showToast('Đã gửi thư')
   if (activeMailbox.value.toLowerCase().includes('sent')) {
+    invalidateLists()
     loadMessages()
   }
-  loadMailboxes()
+  loadMailboxes(true)
 }
 
 async function logout() {
@@ -252,91 +325,128 @@ async function logout() {
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden bg-white">
-    <Sidebar
-      :mailboxes="mailboxes"
-      :active="activeMailbox"
-      :collapsed="sidebarCollapsed"
-      @select="selectMailbox"
-      @compose="openCompose"
-      @toggle="sidebarCollapsed = !sidebarCollapsed"
-    />
+  <div class="flex h-screen flex-col overflow-hidden bg-oc-bg">
+    <div class="flex min-h-0 flex-1">
+      <Sidebar
+        :mailboxes="mailboxes"
+        :active="activeMailbox"
+        :collapsed="sidebarCollapsed"
+        @select="selectMailbox"
+        @compose="openCompose"
+        @toggle="sidebarCollapsed = !sidebarCollapsed"
+      />
 
-    <div class="flex min-w-0 flex-1 flex-col">
-      <!-- header -->
-      <header class="flex h-16 shrink-0 items-center gap-2 bg-white px-4">
-        <div class="flex h-12 max-w-3xl flex-1 items-center gap-3 rounded-full bg-gmail-hover px-5">
-          <MdiIcon :path="mdiMagnify" :size="21" class="shrink-0 text-gmail-sub" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Tìm trong hộp thư"
-            class="h-full min-w-0 flex-1 bg-transparent text-sm text-gmail-text outline-none placeholder:text-gmail-light"
-          />
-          <button v-if="searchQuery" class="text-gmail-sub hover:text-gmail-text" title="Xóa tìm kiếm" @click="searchQuery = ''">
-            <MdiIcon :path="mdiClose" :size="20" />
-          </button>
-        </div>
-
-        <div class="ml-auto flex shrink-0 items-center gap-2">
-          <button
-            class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
-            title="Đăng xuất"
-            @click="logout"
-          >
-            <MdiIcon :path="mdiLogout" :size="21" />
-          </button>
+      <div class="flex min-w-0 flex-1 flex-col">
+        <!-- header -->
+        <header class="flex h-12 shrink-0 items-center gap-3 border-b border-oc-border bg-oc-panel px-3">
           <div
-            class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white"
-            :style="{ backgroundColor: avatarColor(auth.username || 'x') }"
-            :title="auth.username"
+            class="flex h-8 max-w-md flex-1 items-center gap-2 border border-oc-border bg-oc-bg px-3 transition focus-within:border-oc-accent/60"
           >
-            {{ initial(auth.username) }}
+            <MdiIcon :path="mdiMagnify" :size="15" class="shrink-0 text-oc-faint" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Tìm trong hộp thư..."
+              class="h-full min-w-0 flex-1 bg-transparent text-[13px] text-oc-text outline-none placeholder:text-oc-faint"
+            />
+            <button
+              v-if="searchQuery"
+              class="text-oc-faint transition hover:text-oc-text"
+              title="Xóa tìm kiếm"
+              @click="searchQuery = ''"
+            >
+              <MdiIcon :path="mdiClose" :size="15" />
+            </button>
           </div>
+
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <button
+              class="flex h-8 w-8 items-center justify-center border border-oc-border text-oc-sub transition hover:border-oc-border2 hover:text-oc-text"
+              title="Đăng xuất"
+              @click="logout"
+            >
+              <MdiIcon :path="mdiLogout" :size="16" />
+            </button>
+            <div
+              class="hidden h-8 items-center gap-2 border border-oc-border bg-oc-bg px-2 sm:flex"
+              :title="auth.username"
+            >
+              <span
+                class="flex h-5 w-5 items-center justify-center bg-oc-hover text-[10px] font-bold text-oc-sub"
+                >{{ initial(auth.username) }}</span
+              >
+              <span class="max-w-40 truncate text-[11px] text-oc-sub">{{ auth.username }}</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- body: list full-width, bấm thư -> mở trang đọc thay thế -->
+        <div class="flex min-h-0 flex-1">
+          <MessageDetail
+            v-if="selected"
+            :message="selected"
+            :mailbox="activeMailbox"
+            @back="closeMessage"
+            @reply="openReply"
+            @reply-all="(m) => openReply(m, true)"
+            @forward="openForward"
+            @delete="deleteSelected"
+            @unread="markUnread"
+            @star="toggleStar"
+          />
+
+          <div v-else-if="loadingDetail" class="flex flex-1 items-center justify-center">
+            <svg class="h-5 w-5 animate-spin text-oc-accent" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+          </div>
+
+          <MessageList
+            v-else
+            :messages="filteredMessages"
+            :total="total"
+            :page="page"
+            :limit="limit"
+            :mailbox="activeMailbox"
+            :loading="loadingList"
+            @select="openMessage"
+            @star="toggleStar"
+            @page="changePage"
+            @reply="openReply"
+            @refresh="refresh"
+            @batch="runBatch"
+          />
         </div>
-      </header>
-
-      <!-- body: list full-width, bấm thư -> mở trang đọc thay thế -->
-      <div class="flex min-h-0 flex-1">
-        <MessageDetail
-          v-if="selected"
-          :message="selected"
-          :mailbox="activeMailbox"
-          @back="closeMessage"
-          @reply="openReply"
-          @reply-all="(m) => openReply(m, true)"
-          @forward="openForward"
-          @delete="deleteSelected"
-          @unread="markUnread"
-          @star="toggleStar"
-        />
-
-        <div v-else-if="loadingDetail" class="flex flex-1 items-center justify-center">
-          <svg class="h-6 w-6 animate-spin text-gmail-light" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-        </div>
-
-        <MessageList
-          v-else
-          :messages="filteredMessages"
-          :total="total"
-          :page="page"
-          :limit="limit"
-          :mailbox="activeMailbox"
-          :loading="loadingList"
-          @select="openMessage"
-          @star="toggleStar"
-          @page="changePage"
-          @reply="openReply"
-          @refresh="refresh"
-          @batch="runBatch"
-        />
       </div>
     </div>
 
+    <!-- status bar kiểu TUI -->
+    <footer
+      class="flex h-6 shrink-0 items-center gap-3 border-t border-oc-border bg-oc-panel px-3 text-[10px] text-oc-faint"
+    >
+      <span class="flex items-center gap-1.5">
+        <span class="text-[8px] leading-none text-oc-accent">●</span>
+        <span class="font-bold uppercase tracking-[0.15em] text-oc-sub">{{
+          mailboxLabel(activeMailbox)
+        }}</span>
+      </span>
+      <span class="hidden sm:inline">{{ total }} thư</span>
+      <span v-if="activeUnseen > 0" class="text-oc-accent">{{ activeUnseen }} chưa đọc</span>
+      <span class="ml-auto hidden truncate sm:inline">{{ auth.username }}</span>
+    </footer>
+
     <ComposeModal v-if="compose" :draft="compose" @close="compose = null" @sent="onSent" />
+
+    <ConfirmDialog
+      :open="!!confirmState"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      confirm-text="Xóa"
+      :loading="deleting"
+      @confirm="doDelete"
+      @cancel="confirmState = null"
+    />
 
     <transition
       enter-active-class="transition duration-200 ease-out"
@@ -344,7 +454,10 @@ async function logout() {
       leave-active-class="transition duration-150 ease-in"
       leave-to-class="translate-y-2 opacity-0"
     >
-      <div v-if="toast" class="fixed bottom-6 left-6 z-50 rounded bg-[#323639] px-5 py-3 text-sm text-white shadow-lg">
+      <div
+        v-if="toast"
+        class="fixed bottom-10 left-4 z-50 flex items-center gap-2.5 border border-oc-border2 border-l-2 border-l-oc-accent bg-oc-panel px-4 py-2.5 text-xs text-oc-text shadow-dialog"
+      >
         {{ toast }}
       </div>
     </transition>

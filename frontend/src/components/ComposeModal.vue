@@ -1,7 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { mdiClose, mdiPaperclip, mdiSend, mdiTrashCan } from '@mdi/js'
 import MdiIcon from './MdiIcon.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 import { api } from '../api'
 import { formatBytes, splitEmails } from '../format'
 
@@ -22,6 +23,25 @@ const files = ref([])
 const sending = ref(false)
 const error = ref('')
 const fileInput = ref(null)
+const confirmDiscard = ref(false)
+
+const hasContent = computed(
+  () =>
+    to.value.trim() !== '' ||
+    cc.value.trim() !== '' ||
+    bcc.value.trim() !== '' ||
+    subject.value.trim() !== '' ||
+    body.value.trim() !== '' ||
+    files.value.length > 0
+)
+
+function requestClose() {
+  if (hasContent.value) {
+    confirmDiscard.value = true
+  } else {
+    emit('close')
+  }
+}
 
 function addFiles(e) {
   const list = Array.from(e.target.files || [])
@@ -77,94 +97,155 @@ async function send() {
 </script>
 
 <template>
-  <div class="fixed bottom-0 right-4 z-50 flex h-[520px] max-h-[calc(100vh-2rem)] w-[560px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-t-lg border border-gmail-border bg-white shadow-2xl">
-    <div class="flex h-10 shrink-0 items-center justify-between bg-gmail-hover px-4">
-      <span class="text-xs font-medium text-gmail-text">
-        {{ draft.inReplyTo ? 'Trả lời' : 'Thư mới' }}
-      </span>
-      <button
-        class="rounded-full p-1.5 text-gmail-sub transition hover:bg-white/70"
-        title="Đóng"
-        @click="emit('close')"
-      >
-        <MdiIcon :path="mdiClose" :size="18" />
-      </button>
-    </div>
-
-    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div class="flex shrink-0 items-center border-b border-gmail-hover px-4">
-        <input
-          v-model="to"
-          type="text"
-          placeholder="Người nhận"
-          class="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gmail-light"
-        />
-        <button v-if="!showCc" class="px-1.5 text-xs text-gmail-sub hover:text-gmail-blue" @click="showCc = true">Cc</button>
-        <button v-if="!showBcc" class="px-1.5 text-xs text-gmail-sub hover:text-gmail-blue" @click="showBcc = true">Bcc</button>
-      </div>
-      <div v-if="showCc" class="flex shrink-0 items-center border-b border-gmail-hover px-4">
-        <span class="w-8 text-xs text-gmail-sub">Cc</span>
-        <input v-model="cc" type="text" class="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />
-      </div>
-      <div v-if="showBcc" class="flex shrink-0 items-center border-b border-gmail-hover px-4">
-        <span class="w-8 text-xs text-gmail-sub">Bcc</span>
-        <input v-model="bcc" type="text" class="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />
-      </div>
-      <div class="shrink-0 border-b border-gmail-hover px-4">
-        <input
-          v-model="subject"
-          type="text"
-          placeholder="Tiêu đề"
-          class="h-10 w-full bg-transparent text-sm font-medium outline-none placeholder:font-normal placeholder:text-gmail-light"
-        />
-      </div>
-
-      <textarea
-        v-model="body"
-        placeholder="Nội dung thư..."
-        class="min-h-[180px] w-full flex-1 resize-none px-4 py-3 text-sm leading-6 outline-none placeholder:text-gmail-light"
-      ></textarea>
-
-      <div v-if="files.length" class="flex flex-wrap gap-2 px-4 pb-3">
-        <div
-          v-for="(f, i) in files"
-          :key="i"
-          class="flex items-center gap-2 rounded border border-gmail-border py-1.5 pl-2 pr-2 text-xs text-gmail-text"
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+    @click.self="requestClose()"
+  >
+    <div
+      class="flex h-[560px] max-h-full w-[560px] max-w-full flex-col border border-oc-border2 bg-oc-panel shadow-dialog"
+    >
+      <!-- title bar -->
+      <div class="flex h-10 shrink-0 items-center justify-between border-b border-oc-border bg-oc-surface px-3">
+        <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-oc-text">
+          <span class="text-oc-accent">▸</span>
+          {{ draft.inReplyTo ? 'Trả lời thư' : 'Thư mới' }}
+        </span>
+        <button
+          class="flex h-6 w-6 items-center justify-center text-oc-faint transition hover:text-oc-error"
+          title="Đóng"
+          @click="requestClose()"
         >
-          <span class="max-w-40 truncate">{{ f.filename }}</span>
-          <span class="text-gmail-light">{{ formatBytes(f.size) }}</span>
-          <button class="text-gmail-light hover:text-gmail-text" title="Gỡ đính kèm" @click="removeFile(i)">✕</button>
-        </div>
+          <MdiIcon :path="mdiClose" :size="16" />
+        </button>
       </div>
 
-      <p v-if="error" class="mx-4 mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-600">{{ error }}</p>
-    </div>
+      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div
+          class="flex shrink-0 items-center border-b border-oc-border px-3 transition focus-within:border-oc-accent/60"
+        >
+          <span class="w-10 shrink-0 text-[10px] font-bold uppercase tracking-wider text-oc-faint">Tới</span>
+          <input
+            v-model="to"
+            type="text"
+            placeholder="nguoi_nhan@vi-du.com"
+            class="h-10 min-w-0 flex-1 bg-transparent text-[13px] text-oc-text outline-none placeholder:text-oc-faint"
+          />
+          <button
+            v-if="!showCc"
+            class="px-1.5 text-[10px] font-bold uppercase tracking-wider text-oc-faint transition hover:text-oc-accent"
+            @click="showCc = true"
+          >
+            Cc
+          </button>
+          <button
+            v-if="!showBcc"
+            class="px-1.5 text-[10px] font-bold uppercase tracking-wider text-oc-faint transition hover:text-oc-accent"
+            @click="showBcc = true"
+          >
+            Bcc
+          </button>
+        </div>
+        <div
+          v-if="showCc"
+          class="flex shrink-0 items-center border-b border-oc-border px-3 transition focus-within:border-oc-accent/60"
+        >
+          <span class="w-10 shrink-0 text-[10px] font-bold uppercase tracking-wider text-oc-faint">Cc</span>
+          <input
+            v-model="cc"
+            type="text"
+            class="h-10 min-w-0 flex-1 bg-transparent text-[13px] text-oc-text outline-none placeholder:text-oc-faint"
+          />
+        </div>
+        <div
+          v-if="showBcc"
+          class="flex shrink-0 items-center border-b border-oc-border px-3 transition focus-within:border-oc-accent/60"
+        >
+          <span class="w-10 shrink-0 text-[10px] font-bold uppercase tracking-wider text-oc-faint">Bcc</span>
+          <input
+            v-model="bcc"
+            type="text"
+            class="h-10 min-w-0 flex-1 bg-transparent text-[13px] text-oc-text outline-none placeholder:text-oc-faint"
+          />
+        </div>
+        <div
+          class="shrink-0 border-b border-oc-border px-3 transition focus-within:border-oc-accent/60"
+        >
+          <input
+            v-model="subject"
+            type="text"
+            placeholder="Tiêu đề"
+            class="h-10 w-full bg-transparent text-[13px] font-bold text-oc-text outline-none placeholder:font-normal placeholder:text-oc-faint"
+          />
+        </div>
 
-    <div class="flex h-14 shrink-0 items-center gap-2 border-t border-gmail-hover px-4">
-      <button
-        class="mr-auto flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
-        title="Vứt bỏ thư"
-        @click="emit('close')"
-      >
-        <MdiIcon :path="mdiTrashCan" :size="21" />
-      </button>
-      <button
-        :disabled="sending"
-        class="flex items-center gap-2 rounded-full bg-gmail-blue px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-gmail-blueDark disabled:cursor-not-allowed disabled:opacity-60"
-        @click="send"
-      >
-        <span v-if="sending">Đang gửi...</span>
-        <span v-else>Gửi</span>
-        <MdiIcon v-if="!sending" :path="mdiSend" :size="18" />
-      </button>
-      <button
-        class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
-        title="Đính kèm tệp"
-        @click="fileInput && fileInput.click()"
-      >
-        <MdiIcon :path="mdiPaperclip" :size="21" />
-      </button>
-      <input ref="fileInput" type="file" multiple class="hidden" @change="addFiles" />
+        <textarea
+          v-model="body"
+          placeholder="Nội dung thư..."
+          class="min-h-[180px] w-full flex-1 resize-none bg-oc-bg px-3 py-3 text-[13px] leading-6 text-oc-text outline-none placeholder:text-oc-faint"
+        ></textarea>
+
+        <div v-if="files.length" class="flex flex-wrap gap-2 px-3 pb-3">
+          <div
+            v-for="(f, i) in files"
+            :key="i"
+            class="flex items-center gap-2 rounded-[3px] border border-oc-border bg-oc-surface px-2.5 py-1.5 text-xs text-oc-sub"
+          >
+            <span class="max-w-40 truncate">{{ f.filename }}</span>
+            <span class="text-oc-faint">{{ formatBytes(f.size) }}</span>
+            <button
+              class="text-oc-faint transition hover:text-oc-error"
+              title="Gỡ đính kèm"
+              @click="removeFile(i)"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <p
+          v-if="error"
+          class="mx-3 mb-3 border-l-2 border-oc-error bg-oc-error/10 px-3 py-2 text-xs text-oc-error"
+        >
+          {{ error }}
+        </p>
+      </div>
+
+      <!-- footer -->
+      <div class="flex h-12 shrink-0 items-center gap-2 border-t border-oc-border px-3">
+        <button
+          class="flex h-8 w-8 items-center justify-center text-oc-faint transition hover:text-oc-error"
+          title="Vứt bỏ thư"
+          @click="requestClose()"
+        >
+          <MdiIcon :path="mdiTrashCan" :size="17" />
+        </button>
+        <button
+          class="flex h-8 w-8 items-center justify-center text-oc-faint transition hover:text-oc-text"
+          title="Đính kèm tệp"
+          @click="fileInput && fileInput.click()"
+        >
+          <MdiIcon :path="mdiPaperclip" :size="17" />
+        </button>
+        <input ref="fileInput" type="file" multiple class="hidden" @change="addFiles" />
+        <button
+          :disabled="sending"
+          class="ml-auto flex items-center gap-2 bg-oc-accent px-4 py-1.5 text-xs font-bold text-oc-bg transition hover:bg-oc-accent2 disabled:cursor-not-allowed disabled:opacity-60"
+          @click="send"
+        >
+          <span v-if="sending">Đang gửi...</span>
+          <span v-else>Gửi</span>
+          <MdiIcon v-if="!sending" :path="mdiSend" :size="14" />
+        </button>
+      </div>
+
+      <ConfirmDialog
+        :open="confirmDiscard"
+        title="Vứt bỏ thư đang soạn?"
+        message="Nội dung bạn đã nhập sẽ bị mất và không thể khôi phục."
+        confirm-text="Vứt bỏ"
+        @confirm="emit('close')"
+        @cancel="confirmDiscard = false"
+      />
     </div>
   </div>
 </template>

@@ -3,10 +3,12 @@ package imapx
 import (
 	"bytes"
 	"crypto/tls"
+	"net"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emersion/go-imap"
@@ -16,34 +18,54 @@ import (
 	"webmail/backend/internal/mimex"
 )
 
+const (
+	dialTimeout          = 10 * time.Second
+	handshakeLoginTimout = 15 * time.Second
+)
+
 // Dial connects and logs into the IMAP server with the given credentials.
+// Connect + handshake + login are bounded by timeouts so a blocked or
+// unresponsive server fails fast instead of hanging the request.
 func Dial(cfg *config.Config, username, password string) (*client.Client, error) {
-	addr := fmt.Sprintf("%s:%d", cfg.IMAPHost, cfg.IMAPPort)
+	addr := net.JoinHostPort(cfg.IMAPHost, strconv.Itoa(cfg.IMAPPort))
 	tlsConf := &tls.Config{ServerName: cfg.IMAPHost, InsecureSkipVerify: cfg.IMAPSkipVerify}
 
+	rawConn, err := net.DialTimeout("tcp", addr, dialTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("kết nối IMAP (timeout 10s): %w", err)
+	}
+	_ = rawConn.SetDeadline(time.Now().Add(handshakeLoginTimout))
+
 	var c *client.Client
-	var err error
 	switch cfg.IMAPMode {
-	case "plain":
-		c, err = client.Dial(addr)
 	case "starttls":
-		c, err = client.Dial(addr)
+		c, err = client.New(rawConn)
 		if err == nil {
 			if err = c.StartTLS(tlsConf); err != nil {
-				c.Logout()
+				rawConn.Close()
 				return nil, fmt.Errorf("IMAP STARTTLS: %w", err)
 			}
 		}
+	case "plain":
+		c, err = client.New(rawConn)
 	default:
-		c, err = client.DialTLS(addr, tlsConf)
+		tlsConn := tls.Client(rawConn, tlsConf)
+		if err := tlsConn.Handshake(); err != nil {
+			rawConn.Close()
+			return nil, fmt.Errorf("bắt tay TLS với IMAP: %w", err)
+		}
+		c, err = client.New(tlsConn)
 	}
 	if err != nil {
+		rawConn.Close()
 		return nil, fmt.Errorf("kết nối IMAP: %w", err)
 	}
+
 	if err := c.Login(username, password); err != nil {
 		c.Logout()
 		return nil, fmt.Errorf("đăng nhập IMAP thất bại: %w", err)
 	}
+	_ = rawConn.SetDeadline(time.Time{})
 	return c, nil
 }
 
@@ -89,6 +111,72 @@ func ListMailboxes(c *client.Client, withStatus bool) ([]Mailbox, error) {
 	}
 	sortMailboxes(out)
 	return out, nil
+}
+
+// ListMailboxesPooled lists mailboxes and fills total/unseen counts using
+// parallel STATUS commands over pooled connections.
+func ListMailboxesPooled(p *Pool, user, pass string, workers int) ([]Mailbox, error) {
+	var boxes []Mailbox
+	err := p.Do(user, pass, func(c *client.Client) error {
+		var e error
+		boxes, e = ListMailboxes(c, false)
+		return e
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(boxes) == 0 {
+		return boxes, nil
+	}
+	if workers < 1 {
+		workers = 3
+	}
+
+	type status struct{ total, unseen int }
+	results := make([]status, len(boxes))
+	sem := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+
+	for i := range boxes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			name := boxes[i].Name
+			var st status
+			err := p.Do(user, pass, func(c *client.Client) error {
+				s, e := c.Status(name, []imap.StatusItem{imap.StatusMessages, imap.StatusUnseen})
+				if e != nil {
+					return e
+				}
+				if s != nil {
+					st = status{total: int(s.Messages), unseen: int(s.Unseen)}
+				}
+				return nil
+			})
+			if err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+				return
+			}
+			results[i] = st
+		}(i)
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	for i := range boxes {
+		boxes[i].Total = results[i].total
+		boxes[i].Unseen = results[i].unseen
+	}
+	return boxes, nil
 }
 
 func sortMailboxes(list []Mailbox) {
@@ -173,14 +261,13 @@ func ListMessages(c *client.Client, mailbox string, page, limit int) (int, []Sum
 		return 0, nil, fmt.Errorf("không mở được hộp thư %q: %w", mailbox, err)
 	}
 	total := int(mbox.Messages)
-	msgs := []Summary{}
 	if total == 0 {
-		return total, msgs, nil
+		return total, []Summary{}, nil
 	}
 	end := total - page*limit
 	start := end - limit + 1
 	if end < 1 {
-		return total, msgs, nil
+		return total, []Summary{}, nil
 	}
 	if start < 1 {
 		start = 1
@@ -206,47 +293,38 @@ func ListMessages(c *client.Client, mailbox string, page, limit int) (int, []Sum
 		imap.FetchInternalDate,
 	}
 
-	// Metadata first: a separate, always-safe command. Snippets are fetched
-	// in a second best-effort command because some servers (e.g. GreenMail)
-	// respond non-compliantly to partial fetches and poison the whole batch.
+	// Single combined fetch (metadata + partial body) saves a round trip.
+	// Some servers (e.g. GreenMail) respond non-compliantly to partial
+	// fetches and return nothing - then retry with metadata only.
 	ch := make(chan *imap.Message, limit)
-	if err := c.Fetch(set, metaItems, ch); err != nil {
+	if err := c.Fetch(set, append(metaItems, textSection.FetchItem()), ch); err != nil {
 		return 0, nil, fmt.Errorf("lỗi tải danh sách thư: %w", err)
 	}
+	var msgs []Summary
 	for m := range ch {
 		if m == nil {
 			continue
 		}
 		msgs = append(msgs, summaryFrom(m))
-	}
-	if len(msgs) == 0 {
-		return total, []Summary{}, nil
+		if r := m.GetBody(textSection); r != nil {
+			msgs[len(msgs)-1].Snippet = mimex.ExtractSnippet(readAll(r))
+		}
 	}
 
-	snippets := fetchSnippets(c, set, textSection, limit)
-	for i := range msgs {
-		if s, ok := snippets[msgs[i].UID]; ok {
-			msgs[i].Snippet = s
+	if len(msgs) == 0 {
+		// fallback: metadata only (server broke on the partial fetch)
+		ch = make(chan *imap.Message, limit)
+		if err := c.Fetch(set, metaItems, ch); err != nil {
+			return 0, nil, fmt.Errorf("lỗi tải danh sách thư: %w", err)
+		}
+		for m := range ch {
+			if m == nil {
+				continue
+			}
+			msgs = append(msgs, summaryFrom(m))
 		}
 	}
 	return total, msgs, nil
-}
-
-func fetchSnippets(c *client.Client, set *imap.SeqSet, textSection *imap.BodySectionName, limit int) map[uint32]string {
-	out := map[uint32]string{}
-	ch := make(chan *imap.Message, limit)
-	if err := c.Fetch(set, []imap.FetchItem{textSection.FetchItem(), imap.FetchUid}, ch); err != nil {
-		return out
-	}
-	for m := range ch {
-		if m == nil {
-			continue
-		}
-		if r := m.GetBody(textSection); r != nil {
-			out[m.Uid] = mimex.ExtractSnippet(readAll(r))
-		}
-	}
-	return out
 }
 
 func summaryFrom(m *imap.Message) Summary {

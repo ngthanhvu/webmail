@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/emersion/go-imap/client"
+
 	"webmail/backend/internal/config"
 	"webmail/backend/internal/imapx"
 	"webmail/backend/internal/mimex"
@@ -22,6 +24,7 @@ import (
 type Server struct {
 	cfg  *config.Config
 	sess *session.Manager
+	pool *imapx.Pool
 	mux  *http.ServeMux
 }
 
@@ -29,6 +32,7 @@ func New(cfg *config.Config) *Server {
 	s := &Server{
 		cfg:  cfg,
 		sess: session.New(cfg.AppSecret, cfg.SessionHours),
+		pool: imapx.NewPool(cfg),
 		mux:  http.NewServeMux(),
 	}
 	s.mux.HandleFunc("POST /api/login", s.handleLogin)
@@ -70,12 +74,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "Vui lòng nhập tài khoản và mật khẩu")
 		return
 	}
-	c, err := imapx.Dial(s.cfg, req.Username, req.Password)
-	if err != nil {
+	// Verify credentials via IMAP; the connection is kept in the pool so
+	// subsequent requests are fast.
+	if err := s.pool.Do(req.Username, req.Password, func(c *client.Client) error {
+		return c.Noop()
+	}); err != nil {
 		writeErr(w, http.StatusUnauthorized, "Đăng nhập thất bại: "+err.Error())
 		return
 	}
-	imapx.Close(c)
 	if err := s.sess.SetCookie(w, req.Username, req.Password); err != nil {
 		writeErr(w, http.StatusInternalServerError, "Lỗi tạo phiên đăng nhập")
 		return
@@ -93,15 +99,9 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, d session.Data
 }
 
 func (s *Server) handleMailboxes(w http.ResponseWriter, r *http.Request, d session.Data) {
-	c, err := imapx.Dial(s.cfg, d.Username, d.Password)
+	boxes, err := imapx.ListMailboxesPooled(s.pool, d.Username, d.Password, 3)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	defer imapx.Close(c)
-	boxes, err := imapx.ListMailboxes(c, true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, map[string]any{"mailboxes": boxes})
@@ -119,13 +119,13 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request, d se
 		limit = 50
 	}
 
-	c, err := imapx.Dial(s.cfg, d.Username, d.Password)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	defer imapx.Close(c)
-	total, msgs, err := imapx.ListMessages(c, mailbox, page, limit)
+	var total int
+	var msgs []imapx.Summary
+	err := s.pool.Do(d.Username, d.Password, func(c *client.Client) error {
+		var e error
+		total, msgs, e = imapx.ListMessages(c, mailbox, page, limit)
+		return e
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -151,13 +151,12 @@ func (s *Server) handleGetMessage(w http.ResponseWriter, r *http.Request, d sess
 	}
 	markSeen := r.URL.Query().Get("peek") != "1"
 
-	c, err := imapx.Dial(s.cfg, d.Username, d.Password)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	defer imapx.Close(c)
-	msg, err := imapx.GetMessage(c, mailbox, uint32(uid), markSeen)
+	var msg *mimex.ParsedMessage
+	err = s.pool.Do(d.Username, d.Password, func(c *client.Client) error {
+		var e error
+		msg, e = imapx.GetMessage(c, mailbox, uint32(uid), markSeen)
+		return e
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, err.Error())
 		return
@@ -177,13 +176,12 @@ func (s *Server) handleAttachment(w http.ResponseWriter, r *http.Request, d sess
 		mailbox = "INBOX"
 	}
 
-	c, err := imapx.Dial(s.cfg, d.Username, d.Password)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	defer imapx.Close(c)
-	part, err := imapx.GetAttachment(c, mailbox, uint32(uid), section)
+	var part mimex.PartContent
+	err = s.pool.Do(d.Username, d.Password, func(c *client.Client) error {
+		var e error
+		part, e = imapx.GetAttachment(c, mailbox, uint32(uid), section)
+		return e
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, err.Error())
 		return
@@ -233,13 +231,9 @@ func (s *Server) handleFlags(w http.ResponseWriter, r *http.Request, d session.D
 		writeErr(w, http.StatusBadRequest, "Dữ liệu không hợp lệ")
 		return
 	}
-	c, err := imapx.Dial(s.cfg, d.Username, d.Password)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	defer imapx.Close(c)
-	if err := imapx.UpdateFlags(c, mailbox, uint32(uid), req.Seen, req.Flagged, req.Deleted, s.cfg.TrashMailbox); err != nil {
+	if err := s.pool.Do(d.Username, d.Password, func(c *client.Client) error {
+		return imapx.UpdateFlags(c, mailbox, uint32(uid), req.Seen, req.Flagged, req.Deleted, s.cfg.TrashMailbox)
+	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -330,12 +324,14 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request, d session.Da
 	}
 
 	// best-effort: append a copy to the Sent mailbox
-	if c, err := imapx.Dial(s.cfg, d.Username, d.Password); err == nil {
+	if err := s.pool.Do(d.Username, d.Password, func(c *client.Client) error {
 		names := []string{s.cfg.SentMailbox, "Sent", "Sent Messages", "Sent Items", "INBOX.Sent", "INBOX/Sent", "[Gmail]/Sent Mail"}
 		if err := imapx.TryAppend(c, names, msg); err != nil {
 			log.Printf("webmail: không lưu thư vào hộp Sent: %v", err)
 		}
-		imapx.Close(c)
+		return nil
+	}); err != nil {
+		log.Printf("webmail: không kết nối được để lưu hộp Sent: %v", err)
 	}
 
 	writeJSON(w, map[string]any{"ok": true})

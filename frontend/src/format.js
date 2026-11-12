@@ -1,22 +1,3 @@
-const AVATAR_COLORS = [
-  '#1a73e8',
-  '#1967d2',
-  '#4285f4',
-  '#0b57d0',
-  '#0277bd',
-  '#00838f',
-  '#3949ab',
-  '#5c6bc0',
-]
-
-export function avatarColor(seed = '') {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) {
-    h = (h * 31 + seed.charCodeAt(i)) >>> 0
-  }
-  return AVATAR_COLORS[h % AVATAR_COLORS.length]
-}
-
 export function initial(s = '?') {
   const c = (s || '?').trim().charAt(0)
   return c ? c.toUpperCase() : '?'

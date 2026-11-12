@@ -4,23 +4,39 @@ export default {
   theme: {
     extend: {
       colors: {
-        gmail: {
-          blue: '#1a73e8',
-          blueDark: '#1967d2',
-          text: '#202124',
-          sub: '#5f6368',
-          light: '#80868b',
-          border: '#e0e3e7',
-          hover: '#f1f3f4',
-          list: '#f1f3f4',
-          rowhover: '#e8eaed',
-          active: '#d3e3fd',
-          selected: '#c2e6ff',
-          star: '#fbbc04',
+        // opencode-inspired: warm black, hairline borders, burnt-orange accent
+        oc: {
+          bg: '#0a0a0b',
+          panel: '#0f0f11',
+          surface: '#151518',
+          hover: '#1b1b1f',
+          active: '#242429',
+          border: '#232327',
+          border2: '#34343a',
+          text: '#ececee',
+          sub: '#98989f',
+          faint: '#55555d',
+          accent: '#ff5d00',
+          accent2: '#ff7a30',
+          accentDim: '#1d1008',
+          accentLine: '#3d2408',
+          star: '#f5b642',
+          error: '#e5484d',
+          ok: '#46a758',
         },
       },
       fontFamily: {
-        sans: ['Roboto', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Arial', 'sans-serif'],
+        sans: [
+          '"JetBrains Mono"',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          'monospace',
+        ],
+      },
+      boxShadow: {
+        dialog: '0 16px 48px rgba(0, 0, 0, 0.55)',
       },
     },
   },

@@ -1,7 +1,6 @@
 <script setup>
 import {
   mdiArchive,
-  mdiEmailOutline,
   mdiFolder,
   mdiInbox,
   mdiMenu,
@@ -43,81 +42,107 @@ function iconFor(name) {
 
 <template>
   <aside
-    class="hidden shrink-0 flex-col bg-white sm:flex"
-    :class="collapsed ? 'w-16' : 'w-60 pl-2'"
+    class="hidden shrink-0 flex-col border-r border-oc-border bg-oc-panel sm:flex"
+    :class="collapsed ? 'w-12' : 'w-56'"
   >
-    <!-- logo + nút thu gọn -->
+    <!-- brand -->
     <div
-      class="flex h-16 shrink-0 items-center"
-      :class="collapsed ? 'justify-center' : 'gap-1'"
+      class="flex h-12 shrink-0 items-center gap-2.5 border-b border-oc-border px-2.5"
+      :class="collapsed ? 'justify-center' : ''"
     >
       <button
-        class="flex h-10 w-10 items-center justify-center rounded-full text-gmail-sub transition hover:bg-gmail-hover"
+        class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:text-oc-text"
         :title="collapsed ? 'Mở rộng menu' : 'Thu gọn menu'"
         @click="emit('toggle')"
       >
-        <MdiIcon :path="mdiMenu" :size="23" />
+        <MdiIcon :path="mdiMenu" :size="18" />
       </button>
       <template v-if="!collapsed">
-        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gmail-blue text-white shadow-sm">
-          <MdiIcon :path="mdiEmailOutline" :size="20" />
+        <div
+          class="flex h-6 w-6 items-center justify-center bg-oc-accent text-[11px] font-extrabold leading-none text-oc-bg"
+        >
+          &gt;_
         </div>
-        <span class="text-[20px] font-normal text-gmail-sub">Mail</span>
+        <span class="text-sm font-bold tracking-tight text-oc-text">webmail</span>
       </template>
     </div>
 
     <!-- compose -->
-    <div class="flex py-1" :class="collapsed ? 'justify-center' : ''">
+    <div class="flex shrink-0 p-2.5" :class="collapsed ? 'justify-center' : ''">
       <button
         v-if="!collapsed"
-        class="flex items-center gap-2.5 rounded-full bg-white py-2.5 pl-4 pr-6 text-sm font-medium text-gmail-text border transition hover:shadow-lg"
+        class="flex w-full items-center justify-center gap-2 bg-oc-accent px-3 py-2 text-xs font-bold text-oc-bg transition hover:bg-oc-accent2"
         @click="emit('compose')"
       >
-        <MdiIcon :path="mdiPencil" :size="20" class="text-gmail-blue" />
+        <MdiIcon :path="mdiPencil" :size="15" />
         Soạn thư
       </button>
       <button
         v-else
-        class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gmail-blue border transition hover:shadow-lg"
+        class="flex h-8 w-8 items-center justify-center bg-oc-accent text-oc-bg transition hover:bg-oc-accent2"
         title="Soạn thư"
         @click="emit('compose')"
       >
-        <MdiIcon :path="mdiPencil" :size="20" />
+        <MdiIcon :path="mdiPencil" :size="15" />
       </button>
     </div>
 
-    <nav class="flex-1 overflow-y-auto border-r" :class="collapsed ? 'px-1' : 'pr-2'">
+    <!-- mailboxes -->
+    <nav class="min-h-0 flex-1 overflow-y-auto py-1" :class="collapsed ? 'px-1.5' : 'px-2'">
+      <p
+        v-if="!collapsed"
+        class="px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-oc-faint"
+      >
+        Hộp thư
+      </p>
       <button
         v-for="mb in mailboxes"
         :key="mb.name"
-        class="flex w-full items-center text-sm transition"
+        class="group relative flex w-full items-center transition"
         :class="[
           mb.name === active
-            ? 'bg-gmail-active font-bold text-[#041e49]'
-            : 'text-gmail-text hover:bg-gmail-hover',
-          collapsed
-            ? 'mx-auto h-10 w-10 justify-center rounded-full'
-            : 'gap-4 rounded-r-full px-4 py-2.5',
+            ? 'bg-oc-hover text-oc-text'
+            : 'text-oc-sub hover:bg-oc-hover/60 hover:text-oc-text',
+          collapsed ? 'h-8 justify-center' : 'h-8 gap-2.5 rounded-[3px] px-2.5',
         ]"
         :title="mailboxLabel(mb.name)"
         @click="emit('select', mb.name)"
       >
+        <span
+          v-if="mb.name === active"
+          class="absolute inset-y-0 left-0 w-0.5 bg-oc-accent"
+          :class="collapsed ? 'my-1' : ''"
+        ></span>
         <MdiIcon
           :path="iconFor(mb.name)"
-          :size="collapsed ? 20 : 21"
-          :class="mb.name === active ? 'text-gmail-blue' : 'text-gmail-sub'"
+          :size="16"
+          :class="mb.name === active ? 'text-oc-accent' : 'text-oc-faint group-hover:text-oc-sub'"
         />
         <template v-if="!collapsed">
-          <span class="min-w-0 flex-1 truncate text-left">{{ mailboxLabel(mb.name) }}</span>
+          <span class="min-w-0 flex-1 truncate text-left text-[13px]">{{ mailboxLabel(mb.name) }}</span>
           <span
             v-if="mb.unseen > 0"
-            class="shrink-0 text-right font-bold"
-            :class="mb.name === active ? 'text-[#041e49]' : 'text-gmail-text'"
+            class="shrink-0 text-[11px] font-bold"
+            :class="mb.name === active ? 'text-oc-accent' : 'text-oc-sub'"
           >
             {{ mb.unseen > 99 ? '99+' : mb.unseen }}
           </span>
         </template>
       </button>
     </nav>
+
+    <!-- footer -->
+    <div
+      class="flex h-8 shrink-0 items-center border-t border-oc-border px-3 text-[10px] text-oc-faint"
+      :class="collapsed ? 'justify-center' : 'justify-between'"
+    >
+      <template v-if="!collapsed">
+        <span>webmail v0.1</span>
+        <span class="flex items-center gap-1.5"><span class="text-[8px] text-oc-accent">●</span>imap</span>
+      </template>
+      <template v-else>
+        <span class="text-[8px] text-oc-accent">●</span>
+      </template>
+    </div>
   </aside>
 </template>
