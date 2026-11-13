@@ -1,19 +1,21 @@
-export function initial(s = '?') {
+import type { Address } from '@/types'
+
+export function initial(s: string | null | undefined): string {
   const c = (s || '?').trim().charAt(0)
   return c ? c.toUpperCase() : '?'
 }
 
-export function formatBytes(n) {
+export function formatBytes(n: number | null | undefined): string {
   if (n == null) return ''
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function shortDate(d) {
+export function shortDate(d: string | null | undefined): string {
   if (!d) return ''
   const date = new Date(d)
-  if (isNaN(date)) return ''
+  if (Number.isNaN(date.getTime())) return ''
   const now = new Date()
   const sameDay =
     date.getDate() === now.getDate() &&
@@ -28,10 +30,10 @@ export function shortDate(d) {
   return String(date.getFullYear())
 }
 
-export function fullDate(d) {
+export function fullDate(d: string | null | undefined): string {
   if (!d) return ''
   const date = new Date(d)
-  if (isNaN(date)) return ''
+  if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString('vi-VN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -41,21 +43,21 @@ export function fullDate(d) {
   })
 }
 
-export function addrString(a) {
+export function addrString(a: Address | null | undefined): string {
   if (!a) return ''
   if (a.name) return `${a.name} <${a.email}>`
   return a.email || ''
 }
 
-export function splitEmails(s) {
+export function splitEmails(s: string): string[] {
   return String(s || '')
     .split(/[,;]/)
     .map((x) => x.trim())
     .filter(Boolean)
 }
 
-export function mailboxLabel(name) {
-  const map = {
+export function mailboxLabel(name: string): string {
+  const map: Record<string, string> = {
     INBOX: 'Hộp thư đến',
     'INBOX/Drafts': 'Nháp',
     'INBOX/Sent': 'Đã gửi',

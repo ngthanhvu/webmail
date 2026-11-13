@@ -1,9 +1,17 @@
 services:
-  webmail:
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.prod
     env_file: .env
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
     ports:
-      - "8181:8080"
+      - "8181:80"
+    depends_on:
+      - backend
     restart: unless-stopped

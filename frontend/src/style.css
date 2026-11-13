@@ -1,6 +1,74 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Design tokens: light mặc định, .dark (class trên <html>) ghi đè.
+   Giá trị là bộ RGB để dùng được alpha modifier, vd: bg-oc-accent/10 */
+:root {
+  --oc-bg: 244 244 246;
+  --oc-panel: 255 255 255;
+  --oc-surface: 241 241 243;
+  --oc-hover: 233 233 236;
+  --oc-active: 224 224 228;
+  --oc-border: 227 227 231;
+  --oc-border-2: 207 207 213;
+  --oc-text: 24 24 27;
+  --oc-sub: 82 82 91;
+  --oc-faint: 152 152 164;
+  --oc-accent: 37 99 235;
+  --oc-accent-2: 29 78 216;
+  --oc-accent-dim: 227 238 253;
+  --oc-accent-line: 185 210 242;
+  --oc-star: 217 119 6;
+  --oc-error: 220 38 38;
+  --oc-ok: 22 163 74;
+}
+
+.dark {
+  --oc-bg: 10 10 11;
+  --oc-panel: 15 15 17;
+  --oc-surface: 21 21 24;
+  --oc-hover: 27 27 31;
+  --oc-active: 36 36 41;
+  --oc-border: 35 35 39;
+  --oc-border-2: 52 52 58;
+  --oc-text: 236 236 238;
+  --oc-sub: 152 152 159;
+  --oc-faint: 85 85 93;
+  --oc-accent: 77 159 255;
+  --oc-accent-2: 118 180 255;
+  --oc-accent-dim: 14 26 46;
+  --oc-accent-line: 29 58 95;
+  --oc-star: 245 182 66;
+  --oc-error: 229 72 77;
+  --oc-ok: 70 167 88;
+}
+
+/* Tailwind v4: cấu hình ngay trong CSS.
+   Màu ánh xạ tới biến ở trên (inline để alpha modifier hoạt động đúng khi đổi theme),
+   sinh ra utility bg-oc-*, text-oc-*, border-oc-*... */
+@theme inline {
+  --color-oc-bg: rgb(var(--oc-bg));
+  --color-oc-panel: rgb(var(--oc-panel));
+  --color-oc-surface: rgb(var(--oc-surface));
+  --color-oc-hover: rgb(var(--oc-hover));
+  --color-oc-active: rgb(var(--oc-active));
+  --color-oc-border: rgb(var(--oc-border));
+  --color-oc-border-2: rgb(var(--oc-border-2));
+  --color-oc-text: rgb(var(--oc-text));
+  --color-oc-sub: rgb(var(--oc-sub));
+  --color-oc-faint: rgb(var(--oc-faint));
+  --color-oc-accent: rgb(var(--oc-accent));
+  --color-oc-accent-2: rgb(var(--oc-accent-2));
+  --color-oc-accent-dim: rgb(var(--oc-accent-dim));
+  --color-oc-accent-line: rgb(var(--oc-accent-line));
+  --color-oc-star: rgb(var(--oc-star));
+  --color-oc-error: rgb(var(--oc-error));
+  --color-oc-ok: rgb(var(--oc-ok));
+}
+
+@theme {
+  --font-sans: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.25);
+}
 
 html,
 body,
@@ -13,7 +81,7 @@ body {
 }
 
 ::selection {
-  background: rgba(255, 93, 0, 0.35);
+  background: rgb(var(--oc-accent) / 0.25);
 }
 
 /* Terminal-like thin scrollbars */
@@ -22,11 +90,11 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #26262b;
+  background: rgb(var(--oc-border-2) / 0.9);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #38383f;
+  background: rgb(var(--oc-active));
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -36,7 +104,7 @@ body {
 }
 
 input[type='checkbox'] {
-  accent-color: #ff5d00;
+  accent-color: rgb(var(--oc-accent));
 }
 
 button {
@@ -46,6 +114,6 @@ button {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 1px solid #ff5d00;
+  outline: 1px solid rgb(var(--oc-accent));
   outline-offset: 1px;
 }

@@ -1,14 +1,14 @@
-<script setup>
-defineProps({
-  path: { type: String, required: true },
-  size: { type: [Number, String], default: 20 },
-})
+<script setup lang="ts">
+defineProps<{
+  path: string
+  size?: number | string
+}>()
 </script>
 
 <template>
   <svg
-    :width="size"
-    :height="size"
+    :width="size ?? 20"
+    :height="size ?? 20"
     viewBox="0 0 24 24"
     fill="currentColor"
     class="shrink-0"

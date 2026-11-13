@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
   mdiChevronLeft,
@@ -14,20 +14,38 @@ import {
   mdiTrashCan,
 } from '@mdi/js'
 import MdiIcon from './MdiIcon.vue'
-import { initial, shortDate, fullDate, mailboxLabel } from '../format'
+import { initial, shortDate, fullDate, mailboxLabel } from '@/utils/format'
+import type { BatchAction, BatchPayload, MessageSummary } from '@/types'
 
-const props = defineProps({
-  messages: { type: Array, default: () => [] },
-  total: { type: Number, default: 0 },
-  page: { type: Number, default: 0 },
-  limit: { type: Number, default: 50 },
-  mailbox: { type: String, default: 'INBOX' },
-  loading: { type: Boolean, default: false },
-})
+const props = withDefaults(
+  defineProps<{
+    messages?: MessageSummary[]
+    total?: number
+    page?: number
+    limit?: number
+    mailbox?: string
+    loading?: boolean
+  }>(),
+  {
+    messages: () => [],
+    total: 0,
+    page: 0,
+    limit: 50,
+    mailbox: 'INBOX',
+    loading: false,
+  }
+)
 
-const emit = defineEmits(['select', 'star', 'page', 'reply', 'refresh', 'batch'])
+const emit = defineEmits<{
+  select: [m: MessageSummary]
+  star: [m: MessageSummary]
+  page: [p: number]
+  reply: [m: MessageSummary]
+  refresh: []
+  batch: [payload: BatchPayload]
+}>()
 
-const selected = ref([])
+const selected = ref<number[]>([])
 
 const allSelected = computed(
   () => props.messages.length > 0 && selected.value.length === props.messages.length
@@ -42,17 +60,17 @@ const rangeText = computed(() => {
 
 const pages = computed(() => Math.max(1, Math.ceil(props.total / props.limit)))
 
-function toggleAll() {
+function toggleAll(): void {
   selected.value = allSelected.value ? [] : props.messages.map((m) => m.uid)
 }
 
-function toggleOne(uid) {
+function toggleOne(uid: number): void {
   const i = selected.value.indexOf(uid)
   if (i >= 0) selected.value.splice(i, 1)
   else selected.value.push(uid)
 }
 
-function isSelected(uid) {
+function isSelected(uid: number): boolean {
   return selected.value.includes(uid)
 }
 
@@ -67,17 +85,17 @@ watch(
   }
 )
 
-function batch(action) {
+function batch(action: BatchAction): void {
   if (!selected.value.length) return
   emit('batch', { action, uids: [...selected.value] })
 }
 
-function rowClass(m) {
-  if (isSelected(m.uid)) return 'bg-oc-accentDim'
+function rowClass(m: MessageSummary): string {
+  if (isSelected(m.uid)) return 'bg-oc-accent-dim'
   return 'hover:bg-oc-hover/60'
 }
 
-function senderDisplay(m) {
+function senderDisplay(m: MessageSummary): string {
   return m.from || m.fromEmail || '(không rõ)'
 }
 </script>
@@ -143,7 +161,9 @@ function senderDisplay(m) {
       </template>
 
       <div class="ml-auto flex items-center gap-1">
-        <span class="mr-1 whitespace-nowrap text-[11px] text-oc-faint">{{ rangeText }}</span>
+        <span class="mr-1 hidden whitespace-nowrap text-[11px] text-oc-faint sm:inline">{{
+          rangeText
+        }}</span>
         <template v-if="pages > 1">
           <button
             class="flex h-6 w-6 items-center justify-center text-oc-faint transition hover:text-oc-text disabled:cursor-default disabled:opacity-30"
@@ -186,13 +206,13 @@ function senderDisplay(m) {
           <input
             type="checkbox"
             class="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100"
-            :class="{ '!opacity-100': isSelected(m.uid) }"
+            :class="{ 'opacity-100!': isSelected(m.uid) }"
             :checked="isSelected(m.uid)"
             @click.stop="toggleOne(m.uid)"
           />
 
           <button
-            class="flex h-5 w-5 shrink-0 items-center justify-center transition"
+            class="hidden h-5 w-5 shrink-0 items-center justify-center transition sm:flex"
             :title="m.flagged ? 'Bỏ đánh dấu sao' : 'Đánh dấu sao'"
             @click.stop="emit('star', m)"
           >
@@ -208,12 +228,12 @@ function senderDisplay(m) {
           </button>
 
           <span
-            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border border-oc-border bg-oc-surface text-[10px] font-bold text-oc-sub"
+            class="hidden h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border border-oc-border bg-oc-surface text-[10px] font-bold text-oc-sub sm:flex"
           >
             {{ initial(senderDisplay(m)) }}
           </span>
 
-          <div class="flex w-40 shrink-0 items-center gap-1.5 sm:w-48">
+          <div class="flex w-28 shrink-0 items-center gap-1.5 sm:w-48">
             <span
               class="w-1.5 shrink-0 text-center text-[8px] leading-none"
               :class="m.seen ? 'text-transparent' : 'text-oc-accent'"

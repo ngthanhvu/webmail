@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import {
   mdiArchive,
+  mdiClose,
   mdiFolder,
   mdiInbox,
   mdiMenu,
@@ -10,17 +11,31 @@ import {
   mdiTrashCan,
 } from '@mdi/js'
 import MdiIcon from './MdiIcon.vue'
-import { mailboxLabel } from '../format'
+import { mailboxLabel } from '@/utils/format'
+import type { Mailbox } from '@/types'
 
-defineProps({
-  mailboxes: { type: Array, default: () => [] },
-  active: { type: String, default: 'INBOX' },
-  collapsed: { type: Boolean, default: false },
-})
+withDefaults(
+  defineProps<{
+    mailboxes?: Mailbox[]
+    active?: string
+    collapsed?: boolean
+    mobile?: boolean
+  }>(),
+  {
+    mailboxes: () => [],
+    active: 'INBOX',
+    collapsed: false,
+    mobile: false,
+  }
+)
 
-const emit = defineEmits(['select', 'compose', 'toggle'])
+const emit = defineEmits<{
+  select: [name: string]
+  compose: []
+  toggle: []
+}>()
 
-function iconFor(name) {
+function iconFor(name: string): string {
   switch (mailboxLabel(name)) {
     case 'Hộp thư đến':
       return mdiInbox
@@ -42,22 +57,26 @@ function iconFor(name) {
 
 <template>
   <aside
-    class="hidden shrink-0 flex-col border-r border-oc-border bg-oc-panel sm:flex"
-    :class="collapsed ? 'w-12' : 'w-56'"
+    class="shrink-0 flex-col border-r border-oc-border bg-oc-panel"
+    :class="
+      mobile
+        ? 'fixed inset-y-0 left-0 z-60 flex w-64 shadow-dialog'
+        : ['hidden sm:flex', collapsed ? 'sm:w-12' : 'sm:w-56']
+    "
   >
     <!-- brand -->
     <div
       class="flex h-12 shrink-0 items-center gap-2.5 border-b border-oc-border px-2.5"
-      :class="collapsed ? 'justify-center' : ''"
+      :class="collapsed && !mobile ? 'justify-center' : ''"
     >
       <button
         class="flex h-7 w-7 items-center justify-center text-oc-faint transition hover:text-oc-text"
-        :title="collapsed ? 'Mở rộng menu' : 'Thu gọn menu'"
+        :title="mobile ? 'Đóng menu' : collapsed ? 'Mở rộng menu' : 'Thu gọn menu'"
         @click="emit('toggle')"
       >
-        <MdiIcon :path="mdiMenu" :size="18" />
+        <MdiIcon :path="mobile ? mdiClose : mdiMenu" :size="18" />
       </button>
-      <template v-if="!collapsed">
+      <template v-if="!collapsed || mobile">
         <div
           class="flex h-6 w-6 items-center justify-center bg-oc-accent text-[11px] font-extrabold leading-none text-oc-bg"
         >
@@ -71,7 +90,7 @@ function iconFor(name) {
     <div class="flex shrink-0 p-2.5" :class="collapsed ? 'justify-center' : ''">
       <button
         v-if="!collapsed"
-        class="flex w-full items-center justify-center gap-2 bg-oc-accent px-3 py-2 text-xs font-bold text-oc-bg transition hover:bg-oc-accent2"
+        class="flex w-full items-center justify-center gap-2 bg-oc-accent px-3 py-2 text-xs font-bold text-oc-bg transition hover:bg-oc-accent-2"
         @click="emit('compose')"
       >
         <MdiIcon :path="mdiPencil" :size="15" />
@@ -79,7 +98,7 @@ function iconFor(name) {
       </button>
       <button
         v-else
-        class="flex h-8 w-8 items-center justify-center bg-oc-accent text-oc-bg transition hover:bg-oc-accent2"
+        class="flex h-8 w-8 items-center justify-center bg-oc-accent text-oc-bg transition hover:bg-oc-accent-2"
         title="Soạn thư"
         @click="emit('compose')"
       >

@@ -1,28 +1,29 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { mdiClose, mdiPaperclip, mdiSend, mdiTrashCan } from '@mdi/js'
 import MdiIcon from './MdiIcon.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
-import { api } from '../api'
-import { formatBytes, splitEmails } from '../format'
+import { api } from '@/api'
+import { formatBytes, splitEmails } from '@/utils/format'
+import type { Draft, LocalAttachment, SendPayload } from '@/types'
 
-const props = defineProps({
-  draft: { type: Object, required: true },
-})
+const props = defineProps<{
+  draft: Draft
+}>()
 
-const emit = defineEmits(['close', 'sent'])
+const emit = defineEmits<{ close: []; sent: [] }>()
 
-const to = ref((props.draft.to || []).join(', '))
-const cc = ref((props.draft.cc || []).join(', '))
-const bcc = ref((props.draft.bcc || []).join(', '))
+const to = ref((props.draft.to ?? []).join(', '))
+const cc = ref((props.draft.cc ?? []).join(', '))
+const bcc = ref((props.draft.bcc ?? []).join(', '))
 const showCc = ref(!!props.draft.cc?.length)
 const showBcc = ref(!!props.draft.bcc?.length)
 const subject = ref(props.draft.subject || '')
 const body = ref(props.draft.text || '')
-const files = ref([])
+const files = ref<LocalAttachment[]>([])
 const sending = ref(false)
 const error = ref('')
-const fileInput = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 const confirmDiscard = ref(false)
 
 const hasContent = computed(
@@ -35,7 +36,7 @@ const hasContent = computed(
     files.value.length > 0
 )
 
-function requestClose() {
+function requestClose(): void {
   if (hasContent.value) {
     confirmDiscard.value = true
   } else {
@@ -43,8 +44,9 @@ function requestClose() {
   }
 }
 
-function addFiles(e) {
-  const list = Array.from(e.target.files || [])
+function addFiles(e: Event): void {
+  const input = e.target as HTMLInputElement
+  const list = Array.from(input.files ?? [])
   list.forEach((f) => {
     const reader = new FileReader()
     reader.onload = () => {
@@ -57,16 +59,16 @@ function addFiles(e) {
     }
     reader.readAsDataURL(f)
   })
-  e.target.value = ''
+  input.value = ''
 }
 
-function removeFile(i) {
+function removeFile(i: number): void {
   files.value.splice(i, 1)
 }
 
-async function send() {
+async function send(): Promise<void> {
   error.value = ''
-  const payload = {
+  const payload: SendPayload = {
     to: splitEmails(to.value),
     cc: showCc.value ? splitEmails(cc.value) : [],
     bcc: showBcc.value ? splitEmails(bcc.value) : [],
@@ -90,7 +92,7 @@ async function send() {
     await api.send(payload)
     emit('sent')
   } catch (e) {
-    error.value = e.message
+    error.value = e instanceof Error ? e.message : String(e)
   }
   sending.value = false
 }
@@ -102,7 +104,7 @@ async function send() {
     @click.self="requestClose()"
   >
     <div
-      class="flex h-[560px] max-h-full w-[560px] max-w-full flex-col border border-oc-border2 bg-oc-panel shadow-dialog"
+      class="flex h-[560px] max-h-full w-[560px] max-w-full flex-col border border-oc-border-2 bg-oc-panel shadow-dialog"
     >
       <!-- title bar -->
       <div class="flex h-10 shrink-0 items-center justify-between border-b border-oc-border bg-oc-surface px-3">
@@ -229,7 +231,7 @@ async function send() {
         <input ref="fileInput" type="file" multiple class="hidden" @change="addFiles" />
         <button
           :disabled="sending"
-          class="ml-auto flex items-center gap-2 bg-oc-accent px-4 py-1.5 text-xs font-bold text-oc-bg transition hover:bg-oc-accent2 disabled:cursor-not-allowed disabled:opacity-60"
+          class="ml-auto flex items-center gap-2 bg-oc-accent px-4 py-1.5 text-xs font-bold text-oc-bg transition hover:bg-oc-accent-2 disabled:cursor-not-allowed disabled:opacity-60"
           @click="send"
         >
           <span v-if="sending">Đang gửi...</span>

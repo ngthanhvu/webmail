@@ -1,9 +1,10 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { mdiAlertCircle, mdiArrowRight, mdiEmailOutline, mdiEye, mdiEyeOff, mdiLock } from '@mdi/js'
-import MdiIcon from '../components/MdiIcon.vue'
-import { useAuth } from '../stores/auth'
+import { mdiAlertCircle, mdiArrowRight, mdiEmailOutline, mdiEye, mdiEyeOff, mdiLock, mdiWeatherNight, mdiWeatherSunny } from '@mdi/js'
+import MdiIcon from '@/components/MdiIcon.vue'
+import { useAuth } from '@/stores/auth'
+import { useTheme } from '@/stores/theme'
 
 onMounted(() => {
   document.title = 'Webmail'
@@ -11,6 +12,7 @@ onMounted(() => {
 
 const router = useRouter()
 const auth = useAuth()
+const theme = useTheme()
 
 const username = ref('')
 const password = ref('')
@@ -18,7 +20,7 @@ const showPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
 
-async function submit() {
+async function submit(): Promise<void> {
   if (!username.value || !password.value) {
     error.value = 'Vui lòng nhập tài khoản và mật khẩu'
     return
@@ -29,7 +31,7 @@ async function submit() {
     await auth.login(username.value.trim(), password.value)
     router.push('/')
   } catch (e) {
-    error.value = e.message
+    error.value = e instanceof Error ? e.message : String(e)
   }
   loading.value = false
 }
@@ -40,6 +42,15 @@ async function submit() {
     <!-- ánh sáng cam mờ ở nền -->
     <div class="pointer-events-none absolute -top-40 left-1/4 h-96 w-96 rounded-full bg-oc-accent/10 blur-[120px]"></div>
     <div class="pointer-events-none absolute -bottom-40 right-1/4 h-96 w-96 rounded-full bg-oc-accent/5 blur-[120px]"></div>
+
+    <!-- nút đổi theme -->
+    <button
+      class="absolute right-4 top-4 flex h-8 w-8 items-center justify-center border border-oc-border bg-oc-panel text-oc-sub transition hover:border-oc-border-2 hover:text-oc-text"
+      :title="theme.isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'"
+      @click="theme.toggle()"
+    >
+      <MdiIcon :path="theme.isDark ? mdiWeatherSunny : mdiWeatherNight" :size="16" />
+    </button>
 
     <div class="relative w-full max-w-sm border border-oc-border bg-oc-panel shadow-dialog">
       <!-- title bar kiểu terminal -->
@@ -83,7 +94,7 @@ async function submit() {
                 type="text"
                 autocomplete="username"
                 placeholder="ten@thanhvu.net"
-                class="h-10 w-full border border-oc-border bg-oc-bg pl-9 pr-3 text-[13px] text-oc-text outline-none transition placeholder:text-oc-faint hover:border-oc-border2 focus:border-oc-accent"
+                class="h-10 w-full border border-oc-border bg-oc-bg pl-9 pr-3 text-[13px] text-oc-text outline-none transition placeholder:text-oc-faint hover:border-oc-border-2 focus:border-oc-accent"
               />
             </div>
           </div>
@@ -104,7 +115,7 @@ async function submit() {
                 :type="showPassword ? 'text' : 'password'"
                 autocomplete="current-password"
                 placeholder="••••••••"
-                class="h-10 w-full border border-oc-border bg-oc-bg pl-9 pr-11 text-[13px] text-oc-text outline-none transition placeholder:text-oc-faint hover:border-oc-border2 focus:border-oc-accent"
+                class="h-10 w-full border border-oc-border bg-oc-bg pl-9 pr-11 text-[13px] text-oc-text outline-none transition placeholder:text-oc-faint hover:border-oc-border-2 focus:border-oc-accent"
               />
               <button
                 type="button"
@@ -128,7 +139,7 @@ async function submit() {
           <button
             type="submit"
             :disabled="loading"
-            class="flex h-10 w-full items-center justify-center gap-2 bg-oc-accent text-[13px] font-bold text-oc-bg transition hover:bg-oc-accent2 disabled:cursor-not-allowed disabled:opacity-60"
+            class="flex h-10 w-full items-center justify-center gap-2 bg-oc-accent text-[13px] font-bold text-oc-bg transition hover:bg-oc-accent-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <svg v-if="loading" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

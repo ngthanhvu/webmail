@@ -3,10 +3,10 @@
 Webmail tự dựng (kiểu Gmail) đọc/gửi mail qua **IMAP/SMTP** có sẵn.
 
 - **Backend:** Go (`net/http`, `emersion/go-imap`)
-- **Frontend:** Vue 3 + Vite + TailwindCSS + Pinia + Vue Router
-- **Chạy code:** Docker / docker-compose
-  - Dev: `Dockerfile` + `docker-compose.yml` (hot-reload Go bằng `air`, Vite dev server)
-  - Prod: `Dockerfile.prod` + `docker-compose.prod.yml` (1 image duy nhất, Go phục vụ cả API lẫn frontend)
+- **Frontend:** Vue 3 + TypeScript + Vite + TailwindCSS 4 + Pinia + Vue Router (chạy bằng **Bun**, lockfile `bun.lock`)
+- **Chạy code:** Docker / docker-compose, mỗi thành phần có Dockerfile riêng trong thư mục của nó
+  - Dev: `backend/Dockerfile` + `frontend/Dockerfile` + `docker-compose.yml` (hot-reload Go bằng `air`, Vite dev server)
+  - Prod: `backend/Dockerfile.prod` + `frontend/Dockerfile.prod` + `docker-compose.prod.yml` (2 service: Go API + nginx serve frontend tĩnh, proxy `/api`)
 
 ## Tính năng
 
@@ -25,23 +25,26 @@ Webmail tự dựng (kiểu Gmail) đọc/gửi mail qua **IMAP/SMTP** có sẵn
 webmail/
 ├── backend/                  # Go API
 │   ├── main.go
-│   └── internal/
-│       ├── config/           # đọc biến môi trường
-│       ├── session/          # cookie phiên đăng nhập (AES-GCM)
-│       ├── imapx/            # thao tác IMAP (list, fetch, flags, append)
-│       ├── mimex/            # parse/build MIME (text, html, đính kèm, charset)
-│       ├── smtpx/            # gửi SMTP (starttls/tls/plain, PLAIN/LOGIN auth)
-│       └── server/           # HTTP routes + handlers + static files
-├── frontend/                 # Vue 3 + Tailwind
-│   └── src/
-│       ├── views/            # LoginView, MailView
-│       ├── components/       # Sidebar, MessageList, MessageDetail, ComposeModal
-│       ├── stores/           # pinia auth
-│       ├── api.js, router.js, format.js
-├── Dockerfile                # dev targets (backend-dev, frontend-dev)
-├── docker-compose.yml        # chạy dev
-├── Dockerfile.prod           # image prod (multi-stage)
-├── docker-compose.prod.yml   # chạy prod
+│   ├── internal/
+│   │   ├── config/           # đọc biến môi trường
+│   │   ├── session/          # cookie phiên đăng nhập (AES-GCM)
+│   │   ├── imapx/            # thao tác IMAP (list, fetch, flags, append)
+│   │   ├── mimex/            # parse/build MIME (text, html, đính kèm, charset)
+│   │   ├── smtpx/            # gửi SMTP (starttls/tls/plain, PLAIN/LOGIN auth)
+│   │   └── server/           # HTTP routes + handlers
+│   ├── Dockerfile            # dev (air hot-reload)
+│   └── Dockerfile.prod       # build binary Go
+├── frontend/                 # Vue 3 + TypeScript + Tailwind 4
+│   ├── src/
+│   │   ├── views/            # LoginView, MailView
+│   │   ├── components/       # Sidebar, MessageList, MessageDetail, ComposeModal
+│   │   ├── stores/           # pinia auth, theme
+│   │   ├── api.ts, types.ts, router/, utils/
+│   ├── Dockerfile            # dev (Vite dev server)
+│   ├── Dockerfile.prod       # build dist + nginx
+│   └── nginx.conf            # static + proxy /api
+├── docker-compose.yml        # chạy dev (build Dockerfile từng thư mục)
+├── docker-compose.prod.yml   # chạy prod (2 service: backend + frontend)
 └── .env.example              # mẫu cấu hình IMAP/SMTP
 ```
 
@@ -82,7 +85,7 @@ cp .env.example .env
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-- Truy cập: http://localhost:8181 (Go phục vụ API + frontend tĩnh)
+- Truy cập: http://localhost:8181 (nginx phục vụ frontend tĩnh, proxy `/api` sang backend)
 
 ## Cấu hình (.env)
 

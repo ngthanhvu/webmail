@@ -1,7 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuth } from './stores/auth'
-import LoginView from './views/LoginView.vue'
-import MailView from './views/MailView.vue'
+import { useAuth } from '@/stores/auth'
+import LoginView from '@/views/LoginView.vue'
+import MailView from '@/views/MailView.vue'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(),
